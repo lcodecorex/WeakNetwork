@@ -1,7 +1,0 @@
-Package: gee3-luci-app-weaknetwork
-Version: 2016-12-13-1.0-1_all
-Section: utils
-Maintainer: lcodecorex <lcodecore@163.com>
-Architecture: ar71xx
-Filename: gee3-luci-app-weaknetwork_1.0-1_all.ipk
-Description:  A software package of OpenWrt that can help you to build a perfect weak network environment.
