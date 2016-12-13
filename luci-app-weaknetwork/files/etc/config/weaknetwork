@@ -1,0 +1,39 @@
+config controlboard
+        option enable '0'
+        option loss '0%'
+        option loss_s_rate '0%'
+        option delay '0'
+        option float '0'
+        option delay_rate '0%'
+        option duplicate_input '0'
+        option corrupt_input '0'
+        option reorder '0%'
+        option relative '0%'
+
+config bw_cbq
+        option bw 10
+        option avpkt 1000
+        option cell 8
+        option mpu 64
+
+config class_root
+        option bw 10
+        option rate 10
+        option maxburst 20
+        option allot 1514
+        option prio 8
+        option avpkt 1000
+        option cell 8
+        option weight 1
+
+config class_child
+        option bw 10
+        option rate 8
+        option maxburst 20
+        option allot 1514
+        option prio 1
+        option avpkt 1000
+        option cell 8
+        option weight 800
+        option split 1:0
+        option bounded 0

@@ -1,0 +1,88 @@
+#!/bin/sh /etc/rc.common
+# (C) 2016 openwrt.org
+# add by lcodecore <lcodecore@163.com>
+
+START=50
+
+run_netem()
+{
+    #local enabled,interface,loss,loss_s_rate,delay,float,delay_rate,duplicate_input,corrupt_input,reorder,relative
+    config_get enabled $1 "enable"
+    config_get interface $1 "interface"
+    config_get loss $1 "loss" #'0%'
+    config_get loss_s_rate $1 "loss_s_rate" #'0%'
+    config_get delay $1 "delay" #'0'
+    config_get float $1 "float" #'0'
+    config_get delay_rate $1 "delay_rate" #'0%'
+    config_get duplicate_input $1 "duplicate_input" #'0'
+    config_get corrupt_input $1 "corrupt_input" #'0'
+    config_get reorder $1 "reorder" #'0%'
+    config_get relative $1 "relative" #'0%'
+
+    if [[ $enabled -eq 1 ]]; then
+        if [[ -n "$interface" ]]; then
+            for eth in $interface
+            do
+                result="tc qdisc add dev $eth root netem"
+                if [[ "$loss" != 0% ]]; then
+                    result=${result}" loss $loss"
+                    if [[ "$loss_s_rate" != 0% ]]; then
+                        result=${result}" $loss_s_rate"
+                    fi
+                fi
+                if [[ "$delay" != 0 ]]; then
+                    result=${result}" delay ${delay}ms"
+                    if [[ "$float" != 0 ]]; then
+                        result=${result}" ${float}ms"
+                        if [[ "$delay_rate" != 0% ]]; then
+                            result=${result}" $delay_rate"
+                        fi
+                    fi
+                fi
+                if [[ "$duplicate_input" != 0 ]]; then
+                    result=${result}" duplicate ${duplicate_input}%"
+                fi
+                if [[ "$corrupt_input" != 0 ]]; then
+                    result=${result}" corrupt ${corrupt_input}%"
+                fi
+                if [[ "$reorder" != 0% ]]; then
+                    result=${result}" reorder $reorder"
+                    if [[ "$relative" != 0% ]]; then
+                        result=${result}" $relative"
+                    fi
+                fi
+                $result
+                echo ${result/add/del} >> "netem.bak"
+            done
+        fi
+    fi
+}
+
+
+start()
+{
+    config_load weaknetwork
+#
+#    if_all=`ip link | grep ^[0-9] | awk -F: '{print $2}'`
+#    for ifa in $if_all
+#    do
+#        tc qdisc del dev $ifa root
+#    done
+# 先清理上次的配置
+    if [ -f /etc/init.d/netem.bak ]; then
+        while read LINE
+        do
+            $LINE
+        done < "netem.bak"
+        rm "netem.bak"
+    fi
+
+    config_foreach run_netem controlboard
+}
+
+stop()
+{
+    result=`pidof weaknetem`
+    kill -9 $result
+    echo "weaknetem has stoped"
+}

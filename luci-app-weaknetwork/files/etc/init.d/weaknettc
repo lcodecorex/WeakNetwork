@@ -1,0 +1,134 @@
+#!/bin/sh /etc/rc.common
+# (C) 2016 openwrt.org
+# add by lcodecore <lcodecore@163.com>
+
+START=50
+
+# 创建CBQ队列  $1=bw_cbq
+run_tc(){
+    # local enabled,ifnet,bw,avpkt,cell,mpu
+    config_get_bool enabled $1 "enable"
+    config_get ifnet $1 "ifnet"
+    config_get bw $1 "bw"
+    config_get avpkt $1 "avpkt"
+    config_get cell $1 "cell"
+    config_get mpu $1 "mpu"
+
+    if [[ $enabled -eq 1 ]]; then
+        if [[ -n $ifnet ]]; then
+            local i = 0
+            for interface in $ifnet
+            do
+                let i=i+1
+                result="tc qdisc add dev $interface root handle ${i}: cbq bandwidth ${bw}Mbit avpkt $avpkt cell $cell mpu $mpu"
+                # tc qdisc add dev $interface root handle ${i}":" cbq bandwidth ${bw}"Mbit" avpkt $avpkt cell $cell mpu $mpu
+                $result
+                echo ${result/add/del} >> "nettc.bak"
+
+                config_foreach create_class_root class_root $interface $i
+                local j = 2
+                config_foreach create_class_sub class_child $interface $i
+                config_foreach create_route route $interface
+            done
+        fi
+    fi
+}
+
+# $1=class_root $2=interface $3=handle_node
+create_class_root(){
+    local interface=$2
+    local node=$3
+    # local bw,rate,maxburst,allot,prio,avpkt,cell,weight
+    config_get bw $1 "bw"
+    config_get rate $1 "rate"
+    config_get maxburst $1 "maxburst"
+    config_get allot $1 "allot"
+    config_get prio $1 "prio"
+    config_get avpkt $1 "avpkt"
+    config_get cell $1 "cell"
+    config_get weight $1 "weight"
+
+    # tc class change dev $interface parent ${node}":0" classid ${node}":1" cbq bandwidth ${bw}"Mbit" rate ${rate}"Mbit" maxburst $maxburst allot $allot prio $prio avpkt $avpkt cell $cell weight ${weight}"Mbit"
+    # tc filter change dev $interface parent ${node}":0" protocol ip prio 100 route
+    res_class="tc class add dev $interface parent ${node}:0 classid ${node}:1 cbq bandwidth ${bw}Mbit rate ${rate}Mbit maxburst $maxburst allot $allot prio $prio avpkt $avpkt cell $cell weight ${weight}Mbit"
+    $res_class
+    echo ${res_class/add/del} >> "nettc.bak"
+
+    res_filter="tc filter add dev $interface parent ${node}:0 protocol ip prio 100 route"
+    $res_filter
+    echo ${res_filter/add/del} >> "nettc.bak"
+}
+
+# $1=class_child $2=interface $3=parent_handle_node $4=node_id
+global node_id=0
+create_class_sub(){
+    local interface=$2
+    local node=$3
+    let node_id+=1
+    local id=$node_id
+    # local bw,rate,maxburst,allot,prio,avpkt,cell,weight,bounded,route_id
+    config_get bw $1 "bw"
+    config_get rate $1 "rate"
+    config_get maxburst $1 "maxburst"
+    config_get allot $1 "allot"
+    config_get prio $1 "prio"
+    config_get avpkt $1 "avpkt"
+    config_get cell $1 "cell"
+    config_get weight $1 "weight"
+    #config_get split $4 "split"
+    config_get bounded $1 "bounded"
+    config_get route_id $1 "route_id"
+
+    res_class="tc class add dev $interface parent ${node}:1 classid ${node}:${id} cbq bandwidth ${bw}Mbit rate ${rate}Mbit maxburst $maxburst allot $allot prio $prio avpkt $avpkt cell $cell weight ${weight}Kbit split ${node}:0"
+    if [[ $bounded -eq 1 ]]; then
+        res_class=${res_class}" bounded"
+        # tc class add dev $interface parent ${node}":1" classid ${node}":"${id} cbq bandwidth ${bw}"Mbit" rate ${rate}"Mbit" maxburst $maxburst allot $allot prio $prio avpkt $avpkt cell $cell weight ${weight}"Kbit" split ${node}":0" bounded
+    # else
+        # tc class add dev $interface parent ${node}":1" classid ${node}":"${id} cbq bandwidth ${bw}"Mbit" rate ${rate}"Mbit" maxburst $maxburst allot $allot prio $prio avpkt $avpkt cell $cell weight ${weight}"Kbit" split ${node}":0"
+    fi
+    $res_class
+    echo ${res_class/add/del} >> "nettc.bak"
+
+    res_filter="tc filter add dev $interface parent ${node}:0 protocol ip prio 100 route to $route_id flowid ${node}:${id}"
+    $res_filter
+    echo ${res_filter/add/del} >> "nettc.bak"
+    # tc filter add dev $interface parent ${node}":0" protocol ip prio 100 route to $route_id flowid ${node}":"${id}
+}
+
+# $1=route $2=interface
+create_route(){
+    local interface=$2
+    local if_addr=$3
+    # local ip_addr,route_id,if_addr
+    config_get ip_addr $1 "ip_addr"
+    config_get route_id $1 "route_id"
+    config_get if_addr $1 "if_addr"
+    if [ -n $ip_addr ] && [ -n $route_id ]; then
+        # ip route add $ip_addr dev $interface via $if_addr realm $route_id
+        res_route="ip route add $ip_addr dev $interface via $if_addr realm $route_id"
+        $res_route
+        echo ${res_route/add/del} >> "nettc.bak"
+    fi
+}
+
+
+start()
+{
+    config_load weaknetwork
+    # 先清理上次的配置
+    if [ -f /etc/init.d/nettc.bak ]; then
+        while read LINE
+        do
+            $LINE
+        done < "nettc.bak"
+        rm "nettc.bak"
+    fi
+    config_foreach run_tc bw_cbq
+}
+
+stop()
+{
+    result=`pidof weaknettc`
+    kill -9 $result
+    echo "weaknettc has stoped"
+}
