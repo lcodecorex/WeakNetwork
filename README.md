@@ -7,6 +7,8 @@ A software package of OpenWrt that can help you to build a perfect weak network 
 
 `dist`目录是笔者编译好的软件包和已经带弱网包的极壹和极三的固件。`luci-app-weaknetwork_1.0-1_all.ipk`弱网模拟软件包与硬件无关，理论上带有netem工具的OpenWrt系统都可以正常安装使用。
 
+`openwrt-build-base.zip`包含了极壹和极三的编译基础包，已经配置好，加入了弱网包，make menuconfig之后再make就行(会下载其它依赖)。
+
 ## 使用弱网环境包的方式
 ### 方式一：直接在OpenWrt系统中安装ipk软件包
 前提条件：路由器固件需要支持**netem**工具，若安装软件包后操作无效，可以尝试方式二(编译固件)
